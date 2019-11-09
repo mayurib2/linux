@@ -24,6 +24,11 @@
 #include "trace.h"
 #include "pmu.h"
 
+int exit_reason_array[67]= {};
+EXPORT_SYMBOL(exit_reason_array);
+long int exit_count=0;
+EXPORT_SYMBOL(exit_count);
+
 static u32 xstate_required_size(u64 xstate_bv, bool compacted)
 {
 	int feature_bit = 0;
@@ -1028,7 +1033,138 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 
 	eax = kvm_rax_read(vcpu);
 	ecx = kvm_rcx_read(vcpu);
-	kvm_cpuid(vcpu, &eax, &ebx, &ecx, &edx, true);
+	if(eax == 0x4FFFFFFF)
+	{
+		eax = exit_count;
+		//printk("Mayuri eax = %ld", (long)eax);
+	}
+	else if(eax == 0x4FFFFFFD)
+	{
+	
+		switch(ecx)
+		{
+			case 0: eax = exit_reason_array[0];
+				break;
+			case 1: eax = exit_reason_array[1];
+				break;
+			case 2: eax = exit_reason_array[2];
+				break;
+			case 8: eax = exit_reason_array[3];
+				break;
+			case 10: eax = exit_reason_array[7];
+				 break;
+			case 12: eax = exit_reason_array[11];
+				 break;
+			case 13: eax = exit_reason_array[12];
+				 break;
+			case 14: eax = exit_reason_array[13];
+				 break;
+			case 15: eax = exit_reason_array[14];
+				 break;
+			case 18: eax = exit_reason_array[15];
+				 break;
+			case 19: eax = exit_reason_array[16];
+				 break;
+			case 20: eax = exit_reason_array[17];
+				 break;
+			case 21: eax = exit_reason_array[18];
+				 break;
+			case 22: eax = exit_reason_array[19];
+				 break; 
+			case 23: eax = exit_reason_array[20];
+				 break;
+			case 24: eax = exit_reason_array[21];
+				 break;
+			case 25: eax = exit_reason_array[22];
+				 break;
+			case 26: eax = exit_reason_array[23];
+				 break;
+			case 27: eax = exit_reason_array[24];
+				 break;
+			case 36: eax = exit_reason_array[37];
+				 break;
+			case 40: eax = exit_reason_array[38];
+				 break;
+			case 46: eax = exit_reason_array[33];
+				 break;
+			case 47: eax = exit_reason_array[34];
+				 break;
+			case 52: eax = exit_reason_array[46];
+				 break;
+			case 53: eax = exit_reason_array[42];
+				 break;
+			case 57: eax = exit_reason_array[43];
+				 break;
+			case 58: eax = exit_reason_array[44];
+				 break;
+			case 59: eax = exit_reason_array[45];
+				 break;
+			case 60: eax = exit_reason_array[47];
+				 break;
+			case 61: eax = exit_reason_array[44];
+				 break;
+			case 62: eax = exit_reason_array[43];
+				 break;
+			case 63: eax = exit_reason_array[45];
+				 break;
+			case 64: eax = exit_reason_array[42];
+				 break;
+			case 35:
+			case 38:
+			case 42: {
+					eax = 0x00000000;
+					ebx = 0x00000000;
+					ecx = 0x00000000;
+					edx = 0xFFFFFFFF;
+				 }
+				 break;
+			case 3:			
+			case 4:
+			case 5:
+			case 6: 
+			case 7:
+			case 9:
+			case 11:
+			case 16:
+			case 17:
+			case 28:
+			case 29:
+			case 30:
+			case 31:
+			case 32:
+			case 33:
+			case 34:
+			case 37:
+			case 39:
+			case 41:
+			case 43:
+			case 44:
+			case 45:
+			case 48:
+			case 49:
+			case 50:
+			case 51:
+			case 54:
+			case 55:
+			case 56:
+				{
+					eax = 0x00000000;
+					ebx = 0x00000000;
+					ecx = 0x00000000;
+					edx = 0x00000000;
+				}
+				break;
+
+		
+				
+		} 
+	}
+	else
+	{
+		kvm_cpuid(vcpu, &eax, &ebx, &ecx, &edx, true);
+	}
+	
+
 	kvm_rax_write(vcpu, eax);
 	kvm_rbx_write(vcpu, ebx);
 	kvm_rcx_write(vcpu, ecx);
