@@ -60,6 +60,7 @@
 #include "vmcs12.h"
 #include "vmx.h"
 #include "x86.h"
+#include <stdatomic.h>
 
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
@@ -67,7 +68,11 @@ MODULE_LICENSE("GPL");
 extern long int exit_count;
 extern int exit_reason_array[67];
 
-//int array[66];
+extern uint64_t total_time_elapsed;
+extern uint64_t exit_time_start;
+extern uint64_t exit_time_end;
+
+extern uint64_t time_in_exit[67];
 
 static const struct x86_cpu_id vmx_cpu_id[] = {
 	X86_FEATURE_MATCH(X86_FEATURE_VMX),
@@ -4600,6 +4605,8 @@ static int handle_machine_check(struct kvm_vcpu *vcpu)
 
 static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 {
+	uint64_t exit_time_start, exit_time_end;	
+	exit_time_start = rdtsc();
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	struct kvm_run *kvm_run = vcpu->run;
 	u32 intr_info, ex_no, error_code;
@@ -4611,10 +4618,15 @@ static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 	vect_info = vmx->idt_vectoring_info;
 	intr_info = vmx->exit_intr_info;
 
-	if (is_machine_check(intr_info) || is_nmi(intr_info))
+	if (is_machine_check(intr_info) || is_nmi(intr_info)){
+		exit_time_end = rdtsc();
+		time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 		return 1; /* handled by handle_exception_nmi_irqoff() */
+	}
 
-	if (is_invalid_opcode(intr_info))
+	if (is_invalid_opcode(intr_info)){
+		exit_time_end = rdtsc();
+		time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 		return handle_ud(vcpu);
 
 	error_code = 0;
@@ -4630,9 +4642,13 @@ static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 		 * error code on #GP.
 		 */
 		if (error_code) {
+			exit_time_end = rdtsc();
+			time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 			kvm_queue_exception_e(vcpu, GP_VECTOR, error_code);
 			return 1;
 		}
+		exit_time_end = rdtsc();
+		time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 		return kvm_emulate_instruction(vcpu, EMULTYPE_VMWARE_GP);
 	}
 
@@ -4649,6 +4665,8 @@ static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 		vcpu->run->internal.data[0] = vect_info;
 		vcpu->run->internal.data[1] = intr_info;
 		vcpu->run->internal.data[2] = error_code;
+		exit_time_end = rdtsc();
+		time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 		return 0;
 	}
 
@@ -4656,18 +4674,26 @@ static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 		/* EPT won't cause page fault directly */
 		WARN_ON_ONCE(!vcpu->arch.apf.host_apf_reason && enable_ept);
+		exit_time_end = rdtsc();
+		time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 		return kvm_handle_page_fault(vcpu, error_code, cr2, NULL, 0);
 	}
 
 	ex_no = intr_info & INTR_INFO_VECTOR_MASK;
 
-	if (vmx->rmode.vm86_active && rmode_exception(vcpu, ex_no))
+	if (vmx->rmode.vm86_active && rmode_exception(vcpu, ex_no)){
+		exit_time_end = rdtsc();
+		time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 		return handle_rmode_exception(vcpu, ex_no, error_code);
+	}
 
 	switch (ex_no) {
 	case AC_VECTOR:
-		kvm_queue_exception_e(vcpu, AC_VECTOR, error_code);
+		kvm_queue_exception_e(vcpu, AC_VECTOR, error_code);{
+		exit_time_end = rdtsc();
+		time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 		return 1;
+		}
 	case DB_VECTOR:
 		dr6 = vmcs_readl(EXIT_QUALIFICATION);
 		if (!(vcpu->guest_debug &
@@ -4678,6 +4704,8 @@ static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 				WARN_ON(!skip_emulated_instruction(vcpu));
 
 			kvm_queue_exception(vcpu, DB_VECTOR);
+			exit_time_end = rdtsc();
+			time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 			return 1;
 		}
 		kvm_run->debug.arch.dr6 = dr6 | DR6_FIXED_1;
@@ -4702,14 +4730,21 @@ static int handle_exception_nmi(struct kvm_vcpu *vcpu)
 		kvm_run->ex.error_code = error_code;
 		break;
 	}
+	exit_time_end = rdtsc();
+	time_in_exit[0] = time_in_exit[0] + (exit_time_end - exit_time_start);
 	return 0;
+}
 }
 
 static int handle_external_interrupt(struct kvm_vcpu *vcpu)
 {
+	uint64_t exit_time_start, exit_time_end;
+	exit_time_start = rdtsc();	
 	exit_count++;	
 	exit_reason_array[1]++;
 	++vcpu->stat.irq_exits;
+	exit_time_end = rdtsc();
+	time_in_exit[1] = time_in_exit[1] + (exit_time_end - exit_time_start);
 	return 1;
 }
 
@@ -5937,11 +5972,14 @@ void dump_vmcs(void)
  */
 static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 {
+	
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	u32 exit_reason = vmx->exit_reason;
 	u32 vectoring_info = vmx->idt_vectoring_info;
 
 	trace_kvm_exit(exit_reason, vcpu, KVM_ISA_VMX);
+
+	exit_time_start = rdtsc();	
 
 	if(exit_reason == EXIT_REASON_VMCLEAR)
 		exit_reason_array[16]++;
@@ -5988,17 +6026,25 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 		vmx_flush_pml_buffer(vcpu);
 
 	/* If guest state is invalid, start emulating */
-	if (vmx->emulation_required)
+	if (vmx->emulation_required) {
+		exit_time_end = rdtsc();
+		total_time_elapsed = total_time_elapsed + (exit_time_end - exit_time_start);
 		return handle_invalid_guest_state(vcpu);
+	}
 
-	if (is_guest_mode(vcpu) && nested_vmx_exit_reflected(vcpu, exit_reason))
+	if (is_guest_mode(vcpu) && nested_vmx_exit_reflected(vcpu, exit_reason)){
+		exit_time_end = rdtsc();
+		total_time_elapsed = total_time_elapsed + (exit_time_end - exit_time_start);
 		return nested_vmx_reflect_vmexit(vcpu, exit_reason);
+}
 
 	if (exit_reason & VMX_EXIT_REASONS_FAILED_VMENTRY) {
 		dump_vmcs();
 		vcpu->run->exit_reason = KVM_EXIT_FAIL_ENTRY;
 		vcpu->run->fail_entry.hardware_entry_failure_reason
 			= exit_reason;
+		exit_time_end = rdtsc();
+		total_time_elapsed = total_time_elapsed + (exit_time_end - exit_time_start);
 		return 0;
 	}
 
@@ -6007,6 +6053,8 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 		vcpu->run->exit_reason = KVM_EXIT_FAIL_ENTRY;
 		vcpu->run->fail_entry.hardware_entry_failure_reason
 			= vmcs_read32(VM_INSTRUCTION_ERROR);
+		exit_time_end = rdtsc();
+		total_time_elapsed = total_time_elapsed + (exit_time_end - exit_time_start);
 		return 0;
 	}
 
@@ -6033,6 +6081,8 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 			vcpu->run->internal.data[3] =
 				vmcs_read64(GUEST_PHYSICAL_ADDRESS);
 		}
+		exit_time_end = rdtsc();
+		total_time_elapsed = total_time_elapsed + (exit_time_end - exit_time_start);
 		return 0;
 	}
 
@@ -6056,8 +6106,11 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 	}
 
 	if (exit_reason < kvm_vmx_max_exit_handlers
-	    && kvm_vmx_exit_handlers[exit_reason])
+	    && kvm_vmx_exit_handlers[exit_reason]){
+		exit_time_end = rdtsc();
+		total_time_elapsed = total_time_elapsed + (exit_time_end - exit_time_start);
 		return kvm_vmx_exit_handlers[exit_reason](vcpu);
+}
 	else {
 		vcpu_unimpl(vcpu, "vmx: unexpected exit reason 0x%x\n",
 				exit_reason);
@@ -6067,9 +6120,14 @@ static int vmx_handle_exit(struct kvm_vcpu *vcpu)
 			KVM_INTERNAL_ERROR_UNEXPECTED_EXIT_REASON;
 		vcpu->run->internal.ndata = 1;
 		vcpu->run->internal.data[0] = exit_reason;
+		exit_time_end = rdtsc();
+		total_time_elapsed = total_time_elapsed + (exit_time_end - exit_time_start);
 		return 0;
 	}
+		exit_time_end = rdtsc();
+		total_time_elapsed = total_time_elapsed + (exit_time_end - exit_time_start);
 }
+
 
 /*
  * Software based L1D cache flush which is used when microcode providing

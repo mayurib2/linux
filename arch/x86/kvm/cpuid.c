@@ -23,11 +23,23 @@
 #include "mmu.h"
 #include "trace.h"
 #include "pmu.h"
+#include <stdatomic.h>
 
-int exit_reason_array[67]= {};
+
+int exit_reason_array[67] = {};
+long int exit_count = 0;
 EXPORT_SYMBOL(exit_reason_array);
-long int exit_count=0;
 EXPORT_SYMBOL(exit_count);
+
+uint64_t total_time_elapsed = 0;
+uint64_t exit_time_start = 0;
+uint64_t exit_time_end = 0;
+EXPORT_SYMBOL(total_time_elapsed);
+EXPORT_SYMBOL(exit_time_start);
+EXPORT_SYMBOL(exit_time_end);
+
+uint64_t time_in_exit[67] = {};
+EXPORT_SYMBOL(time_in_exit);
 
 static u32 xstate_required_size(u64 xstate_bv, bool compacted)
 {
@@ -1036,7 +1048,6 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 	if(eax == 0x4FFFFFFF)
 	{
 		eax = exit_count;
-		//printk("Mayuri eax = %ld", (long)eax);
 	}
 	else if(eax == 0x4FFFFFFD)
 	{
@@ -1048,6 +1059,8 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 			case 1: eax = exit_reason_array[1];
 				break;
 			case 2: eax = exit_reason_array[2];
+				break;
+			case 7: eax = exit_reason_array[10];
 				break;
 			case 8: eax = exit_reason_array[3];
 				break;
@@ -1081,34 +1094,197 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 				 break;
 			case 27: eax = exit_reason_array[24];
 				 break;
+			case 28: eax = exit_reason_array[5];
+				 break;
+			case 31: eax = exit_reason_array[8];
+				 break;
+			case 32: eax = exit_reason_array[9];
+				 break;
 			case 36: eax = exit_reason_array[37];
 				 break;
 			case 40: eax = exit_reason_array[38];
+				 break;
+			case 43: eax = exit_reason_array[25];
+				 break;
+			case 44: eax = exit_reason_array[26];
 				 break;
 			case 46: eax = exit_reason_array[33];
 				 break;
 			case 47: eax = exit_reason_array[34];
 				 break;
-			case 52: eax = exit_reason_array[46];
+			case 48: eax = exit_reason_array[35];
+				 break;
+			case 49: eax = exit_reason_array[36];
+				 break;
+			case 52: eax = exit_reason_array[50];
 				 break;
 			case 53: eax = exit_reason_array[42];
 				 break;
+			case 54: eax = exit_reason_array[29];
+				 break;
+			case 55: eax = exit_reason_array[30];
+				 break;
 			case 57: eax = exit_reason_array[43];
 				 break;
-			case 58: eax = exit_reason_array[44];
+			case 58: eax = exit_reason_array[48];
 				 break;
-			case 59: eax = exit_reason_array[45];
+			case 59: eax = exit_reason_array[49];
 				 break;
-			case 60: eax = exit_reason_array[47];
+			case 60: eax = exit_reason_array[51];
 				 break;
 			case 61: eax = exit_reason_array[44];
 				 break;
-			case 62: eax = exit_reason_array[43];
+			case 62: eax = exit_reason_array[47];
 				 break;
 			case 63: eax = exit_reason_array[45];
 				 break;
-			case 64: eax = exit_reason_array[42];
+			case 64: eax = exit_reason_array[46];
 				 break;
+			case 35:
+			case 38:
+			case 42: {
+					eax = 0x00000000;
+					ebx = 0x00000000;
+					ecx = 0x00000000;
+					edx = 0xFFFFFFFF;
+				 }
+				 break;
+			case 3:			
+			case 4:
+			case 5:
+			case 6: 
+			case 9:
+			case 11:
+			case 16:
+			case 17:
+			case 29:
+			case 30:
+			case 33:
+			case 34:
+			case 37:
+			case 39:
+			case 41:
+			case 45:
+			case 50:
+			case 51:
+			case 56:
+				{
+					eax = 0x00000000;
+					ebx = 0x00000000;
+					ecx = 0x00000000;
+					edx = 0x00000000;
+				}
+				break;
+		} 
+	}
+	else if(eax == 0x4FFFFFFE) {
+		ecx = (uint32_t)total_time_elapsed;
+		ebx = (uint32_t)(total_time_elapsed>>32);
+
+	}
+	else if(eax == 0x4FFFFFFC){
+		switch(ecx)
+		{
+			case 0: ecx = (uint32_t)total_time_elapsed; 
+//ecx = (uint32_t)time_in_exit[0];
+				ebx = (uint32_t)(time_in_exit[0]>>32);
+				break;
+			case 1: ecx = (uint32_t)time_in_exit[1];
+				ebx = (uint32_t)(time_in_exit[1]>>32);
+				break;
+			case 2: ecx = (uint32_t)time_in_exit[2];
+				ebx = (uint32_t)(time_in_exit[2]>>32);
+				break;
+			case 8: ecx = (uint32_t)time_in_exit[3];
+				ebx = (uint32_t)(time_in_exit[3]>>32);
+				break;
+			case 10: ecx = (uint32_t)time_in_exit[7];
+				ebx = (uint32_t)(time_in_exit[7]>>32);
+				break;
+			case 12: ecx = (uint32_t)time_in_exit[11];
+				ebx = (uint32_t)(time_in_exit[11]>>32);
+				break;
+			case 13: ecx = (uint32_t)time_in_exit[12];
+				ebx = (uint32_t)(time_in_exit[12]>>32);
+				break;
+			case 14: ecx = (uint32_t)time_in_exit[13];
+				ebx = (uint32_t)(time_in_exit[13]>>32);
+				break;
+			case 15: ecx = (uint32_t)time_in_exit[14];
+				ebx = (uint32_t)(time_in_exit[14]>>32);
+				break;
+			case 18: ecx = (uint32_t)time_in_exit[15];
+				ebx = (uint32_t)(time_in_exit[15]>>32);
+				break;
+			case 19: ecx = (uint32_t)time_in_exit[16];
+				ebx = (uint32_t)(time_in_exit[16]>>32);
+				break;
+			case 20: ecx = (uint32_t)time_in_exit[17];
+				ebx = (uint32_t)(time_in_exit[17]>>32);
+				break;
+			case 21: ecx = (uint32_t)time_in_exit[18];
+				ebx = (uint32_t)(time_in_exit[18]>>32);
+				break;
+			case 22: ecx = (uint32_t)time_in_exit[19];
+				ebx = (uint32_t)(time_in_exit[19]>>32);
+				break;
+			case 23: ecx = (uint32_t)time_in_exit[20];
+				ebx = (uint32_t)(time_in_exit[20]>>32);
+				break;
+			case 24: ecx = (uint32_t)time_in_exit[21];
+				ebx = (uint32_t)(time_in_exit[21]>>32);
+				break;
+			case 25: ecx = (uint32_t)time_in_exit[22];
+				ebx = (uint32_t)(time_in_exit[22]>>32);
+				break;
+			case 26: ecx = (uint32_t)time_in_exit[23];
+				ebx = (uint32_t)(time_in_exit[23]>>32);
+				break;
+			case 27: ecx = (uint32_t)time_in_exit[24];
+				ebx = (uint32_t)(time_in_exit[24]>>32);
+				break;
+			case 36: ecx = (uint32_t)time_in_exit[37];
+				ebx = (uint32_t)(time_in_exit[37]>>32);
+				break;
+			case 40: ecx = (uint32_t)time_in_exit[38];
+				ebx = (uint32_t)(time_in_exit[38]>>32);
+				break;
+			case 46: ecx = (uint32_t)time_in_exit[33];
+				ebx = (uint32_t)(time_in_exit[33]>>32);
+				break;
+			case 47: ecx = (uint32_t)time_in_exit[34];
+				ebx = (uint32_t)(time_in_exit[34]>>32);
+				break;
+			case 52: ecx = (uint32_t)time_in_exit[50];
+				ebx = (uint32_t)(time_in_exit[50]>>32);
+				break;
+			case 53: ecx = (uint32_t)time_in_exit[42];
+				ebx = (uint32_t)(time_in_exit[42]>>32);
+				break;
+			case 57: ecx = (uint32_t)time_in_exit[43];
+				ebx = (uint32_t)(time_in_exit[43]>>32);
+				break;
+			case 58: ecx = (uint32_t)time_in_exit[48];
+				ebx = (uint32_t)(time_in_exit[48]>>32);
+				break;
+			case 59: ecx = (uint32_t)time_in_exit[49];
+				ebx = (uint32_t)(time_in_exit[49]>>32);
+				break;
+			case 60: ecx = (uint32_t)time_in_exit[51];
+				ebx = (uint32_t)(time_in_exit[51]>>32);
+				break;
+			case 61: ecx = (uint32_t)time_in_exit[44];
+				ebx = (uint32_t)(time_in_exit[44]>>32);
+				break;
+			case 62: ecx = (uint32_t)time_in_exit[47];
+				ebx = (uint32_t)(time_in_exit[47]>>32);
+				break;
+			case 63: ecx = (uint32_t)time_in_exit[45];
+				ebx = (uint32_t)(time_in_exit[45]>>32);
+				break;
+			case 64: ecx = (uint32_t)time_in_exit[46];
+				ebx = (uint32_t)(time_in_exit[46]>>32);
+				break;
 			case 35:
 			case 38:
 			case 42: {
@@ -1154,11 +1330,17 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 					edx = 0x00000000;
 				}
 				break;
+			
+			
+			
+			
+			
 
-		
-				
-		} 
+
+
+		}
 	}
+
 	else
 	{
 		kvm_cpuid(vcpu, &eax, &ebx, &ecx, &edx, true);
