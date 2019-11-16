@@ -41,6 +41,10 @@ EXPORT_SYMBOL(exit_time_end);
 uint64_t time_in_exit[67] = {};
 EXPORT_SYMBOL(time_in_exit);
 
+//atomic_t*val;
+//atomic_set(val,0);
+//EXPORT_SYMBOL(val);
+
 static u32 xstate_required_size(u64 xstate_bv, bool compacted)
 {
 	int feature_bit = 0;
@@ -1048,6 +1052,8 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 	if(eax == 0x4FFFFFFF)
 	{
 		eax = exit_count;
+		printk("Exit count = %ld\r\n",(long int)exit_count);
+		//eax = atomic_read(val);
 	}
 	else if(eax == 0x4FFFFFFD)
 	{
@@ -1055,6 +1061,7 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 		switch(ecx)
 		{
 			case 0: eax = exit_reason_array[0];
+				printk("Exit reason 0 %d\r\n",exit_reason_array[0]);
 				break;
 			case 1: eax = exit_reason_array[1];
 				break;
@@ -1063,6 +1070,8 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 			case 7: eax = exit_reason_array[10];
 				break;
 			case 8: eax = exit_reason_array[3];
+				break;
+			case 9: eax = exit_reason_array[31];
 				break;
 			case 10: eax = exit_reason_array[7];
 				 break;
@@ -1096,17 +1105,29 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 				 break;
 			case 28: eax = exit_reason_array[5];
 				 break;
+			case 29: eax = exit_reason_array[6];
+				 break;
+			case 30: eax = exit_reason_array[4];
+				 break;
 			case 31: eax = exit_reason_array[8];
 				 break;
 			case 32: eax = exit_reason_array[9];
 				 break;
-			case 36: eax = exit_reason_array[37];
+			case 36: eax = exit_reason_array[38];
 				 break;
-			case 40: eax = exit_reason_array[38];
+			case 37: eax = exit_reason_array[39];
+				 break;
+			case 39: eax = exit_reason_array[40];
+				 break;
+			case 40: eax = exit_reason_array[37];
+				 break;
+			case 41: eax = exit_reason_array[32];
 				 break;
 			case 43: eax = exit_reason_array[25];
 				 break;
 			case 44: eax = exit_reason_array[26];
+				 break;
+			case 45: eax = exit_reason_array[28];
 				 break;
 			case 46: eax = exit_reason_array[33];
 				 break;
@@ -1116,6 +1137,8 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 				 break;
 			case 49: eax = exit_reason_array[36];
 				 break;
+			case 50: eax = exit_reason_array[41];
+				 break;
 			case 52: eax = exit_reason_array[50];
 				 break;
 			case 53: eax = exit_reason_array[42];
@@ -1123,6 +1146,8 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 			case 54: eax = exit_reason_array[29];
 				 break;
 			case 55: eax = exit_reason_array[30];
+				 break;
+			case 56: eax = exit_reason_array[27];
 				 break;
 			case 57: eax = exit_reason_array[43];
 				 break;
@@ -1140,9 +1165,14 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 				 break;
 			case 64: eax = exit_reason_array[46];
 				 break;
+			case 67: eax = exit_reason_array[52];
+				 break;
+			case 68: eax = exit_reason_array[53];
+				 break;
 			case 35:
 			case 38:
-			case 42: {
+			case 42:
+			case 65: {
 					eax = 0x00000000;
 					ebx = 0x00000000;
 					ecx = 0x00000000;
@@ -1153,21 +1183,14 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 			case 4:
 			case 5:
 			case 6: 
-			case 9:
 			case 11:
 			case 16:
 			case 17:
-			case 29:
-			case 30:
 			case 33:
 			case 34:
-			case 37:
-			case 39:
-			case 41:
-			case 45:
-			case 50:
 			case 51:
-			case 56:
+			case 66:
+			
 				{
 					eax = 0x00000000;
 					ebx = 0x00000000;
@@ -1185,8 +1208,8 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 	else if(eax == 0x4FFFFFFC){
 		switch(ecx)
 		{
-			case 0: ecx = (uint32_t)total_time_elapsed; 
-//ecx = (uint32_t)time_in_exit[0];
+			case 0: //ecx = (uint32_t)total_time_elapsed; 
+				ecx = (uint32_t)time_in_exit[0];
 				ebx = (uint32_t)(time_in_exit[0]>>32);
 				break;
 			case 1: ecx = (uint32_t)time_in_exit[1];
