@@ -26,25 +26,20 @@
 #include "pmu.h"
 #include <stdatomic.h>
 
+atomic_t total_exits = ATOMIC_INIT(0);
+EXPORT_SYMBOL(total_exits);
 
 int exit_reason_array[67] = {};
 long int exit_count = 0;
 EXPORT_SYMBOL(exit_reason_array);
 EXPORT_SYMBOL(exit_count);
 
-uint64_t total_time_elapsed = 0;
-uint64_t exit_time_start = 0;
-uint64_t exit_time_end = 0;
+atomic_long_t total_time_elapsed = ATOMIC_INIT(0);
 EXPORT_SYMBOL(total_time_elapsed);
-EXPORT_SYMBOL(exit_time_start);
-EXPORT_SYMBOL(exit_time_end);
 
-uint64_t time_in_exit[67] = {};
+
+atomic_long_t time_in_exit[67] = ATOMIC_INIT(0);
 EXPORT_SYMBOL(time_in_exit);
-
-//atomic_t*val;
-//atomic_set(val,0);
-//EXPORT_SYMBOL(val);
 
 static u32 xstate_required_size(u64 xstate_bv, bool compacted)
 {
@@ -1052,9 +1047,9 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 	ecx = kvm_rcx_read(vcpu);
 	if(eax == 0x4FFFFFFF)
 	{
-		eax = exit_count;
+		eax = atomic_read(&total_exits);
+		//ebx = exit_count;
 		printk("Exit count = %ld\r\n",(long int)exit_count);
-		//eax = atomic_read(val);
 	}
 	else if(eax == 0x4FFFFFFD)
 	{
@@ -1062,7 +1057,6 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 		switch(ecx)
 		{
 			case 0: eax = exit_reason_array[0];
-				printk("Exit reason 0 %d\r\n",exit_reason_array[0]);
 				break;
 			case 1: eax = exit_reason_array[1];
 				break;
@@ -1202,113 +1196,228 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 		} 
 	}
 	else if(eax == 0x4FFFFFFE) {
-		ecx = (uint32_t)total_time_elapsed;
-		ebx = (uint32_t)(total_time_elapsed>>32);
+		u64 local_time = 0;
+		local_time = atomic_long_read(&total_time_elapsed);
+		ecx = (u32)local_time;
+		ebx = (u32)(local_time>>32);
 
 	}
 	else if(eax == 0x4FFFFFFC){
+		u64 t_local_time = 0;
 		switch(ecx)
 		{
-			case 0: //ecx = (uint32_t)total_time_elapsed; 
-				ecx = (uint32_t)time_in_exit[0];
-				ebx = (uint32_t)(time_in_exit[0]>>32);
+			case 0: t_local_time=atomic_long_read(&time_in_exit[0]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				printk("%d", ecx);
 				break;
-			case 1: ecx = (uint32_t)time_in_exit[1];
-				ebx = (uint32_t)(time_in_exit[1]>>32);
+			case 1: t_local_time=atomic_long_read(&time_in_exit[1]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 2: ecx = (uint32_t)time_in_exit[2];
-				ebx = (uint32_t)(time_in_exit[2]>>32);
+			case 2: t_local_time=atomic_long_read(&time_in_exit[2]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;;
 				break;
-			case 8: ecx = (uint32_t)time_in_exit[3];
-				ebx = (uint32_t)(time_in_exit[3]>>32);
+			case 7: t_local_time=atomic_long_read(&time_in_exit[10]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 10: ecx = (uint32_t)time_in_exit[7];
-				ebx = (uint32_t)(time_in_exit[7]>>32);
+			case 8: t_local_time=atomic_long_read(&time_in_exit[3]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;;
 				break;
-			case 12: ecx = (uint32_t)time_in_exit[11];
-				ebx = (uint32_t)(time_in_exit[11]>>32);
+			case 9: t_local_time=atomic_long_read(&time_in_exit[31]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 13: ecx = (uint32_t)time_in_exit[12];
-				ebx = (uint32_t)(time_in_exit[12]>>32);
+			case 10: t_local_time=atomic_long_read(&time_in_exit[7]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 14: ecx = (uint32_t)time_in_exit[13];
-				ebx = (uint32_t)(time_in_exit[13]>>32);
+			case 12: t_local_time=atomic_long_read(&time_in_exit[11]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 15: ecx = (uint32_t)time_in_exit[14];
-				ebx = (uint32_t)(time_in_exit[14]>>32);
+			case 13: t_local_time=atomic_long_read(&time_in_exit[12]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 18: ecx = (uint32_t)time_in_exit[15];
-				ebx = (uint32_t)(time_in_exit[15]>>32);
+			case 14: t_local_time=atomic_long_read(&time_in_exit[13]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 19: ecx = (uint32_t)time_in_exit[16];
-				ebx = (uint32_t)(time_in_exit[16]>>32);
+			case 15: t_local_time=atomic_long_read(&time_in_exit[14]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 20: ecx = (uint32_t)time_in_exit[17];
-				ebx = (uint32_t)(time_in_exit[17]>>32);
+			case 18:t_local_time=atomic_long_read(&time_in_exit[15]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 21: ecx = (uint32_t)time_in_exit[18];
-				ebx = (uint32_t)(time_in_exit[18]>>32);
+			case 28: t_local_time=atomic_long_read(&time_in_exit[5]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 22: ecx = (uint32_t)time_in_exit[19];
-				ebx = (uint32_t)(time_in_exit[19]>>32);
+			case 29: t_local_time=atomic_long_read(&time_in_exit[6]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 23: ecx = (uint32_t)time_in_exit[20];
-				ebx = (uint32_t)(time_in_exit[20]>>32);
+			case 30: t_local_time=atomic_long_read(&time_in_exit[4]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 24: ecx = (uint32_t)time_in_exit[21];
-				ebx = (uint32_t)(time_in_exit[21]>>32);
+			case 31: t_local_time=atomic_long_read(&time_in_exit[8]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 25: ecx = (uint32_t)time_in_exit[22];
-				ebx = (uint32_t)(time_in_exit[22]>>32);
+			case 32: t_local_time=atomic_long_read(&time_in_exit[9]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 26: ecx = (uint32_t)time_in_exit[23];
-				ebx = (uint32_t)(time_in_exit[23]>>32);
+			case 19: t_local_time=atomic_long_read(&time_in_exit[16]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 27: ecx = (uint32_t)time_in_exit[24];
-				ebx = (uint32_t)(time_in_exit[24]>>32);
+			case 20: t_local_time=atomic_long_read(&time_in_exit[17]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 36: ecx = (uint32_t)time_in_exit[37];
-				ebx = (uint32_t)(time_in_exit[37]>>32);
+			case 21: t_local_time=atomic_long_read(&time_in_exit[18]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 40: ecx = (uint32_t)time_in_exit[38];
-				ebx = (uint32_t)(time_in_exit[38]>>32);
+			case 22: t_local_time=atomic_long_read(&time_in_exit[19]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 46: ecx = (uint32_t)time_in_exit[33];
-				ebx = (uint32_t)(time_in_exit[33]>>32);
+			case 23: t_local_time=atomic_long_read(&time_in_exit[20]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 47: ecx = (uint32_t)time_in_exit[34];
-				ebx = (uint32_t)(time_in_exit[34]>>32);
+			case 24: t_local_time=atomic_long_read(&time_in_exit[21]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 52: ecx = (uint32_t)time_in_exit[50];
-				ebx = (uint32_t)(time_in_exit[50]>>32);
+			case 25: t_local_time=atomic_long_read(&time_in_exit[22]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 53: ecx = (uint32_t)time_in_exit[42];
-				ebx = (uint32_t)(time_in_exit[42]>>32);
+			case 26: t_local_time=atomic_long_read(&time_in_exit[23]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 57: ecx = (uint32_t)time_in_exit[43];
-				ebx = (uint32_t)(time_in_exit[43]>>32);
+			case 27: t_local_time=atomic_long_read(&time_in_exit[24]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 58: ecx = (uint32_t)time_in_exit[48];
-				ebx = (uint32_t)(time_in_exit[48]>>32);
+			case 50: t_local_time=atomic_long_read(&time_in_exit[41]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 59: ecx = (uint32_t)time_in_exit[49];
-				ebx = (uint32_t)(time_in_exit[49]>>32);
+			case 53: t_local_time=atomic_long_read(&time_in_exit[42]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 60: ecx = (uint32_t)time_in_exit[51];
-				ebx = (uint32_t)(time_in_exit[51]>>32);
+			case 59: t_local_time=atomic_long_read(&time_in_exit[49]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 61: ecx = (uint32_t)time_in_exit[44];
-				ebx = (uint32_t)(time_in_exit[44]>>32);
+			case 36: t_local_time=atomic_long_read(&time_in_exit[38]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 62: ecx = (uint32_t)time_in_exit[47];
-				ebx = (uint32_t)(time_in_exit[47]>>32);
+			case 37: t_local_time=atomic_long_read(&time_in_exit[39]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 63: ecx = (uint32_t)time_in_exit[45];
-				ebx = (uint32_t)(time_in_exit[45]>>32);
+			case 39: t_local_time=atomic_long_read(&time_in_exit[40]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
-			case 64: ecx = (uint32_t)time_in_exit[46];
-				ebx = (uint32_t)(time_in_exit[46]>>32);
+			case 40: t_local_time=atomic_long_read(&time_in_exit[37]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
 				break;
+			case 41: t_local_time=atomic_long_read(&time_in_exit[32]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 43: t_local_time=atomic_long_read(&time_in_exit[25]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 44: t_local_time=atomic_long_read(&time_in_exit[26]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 45: t_local_time=atomic_long_read(&time_in_exit[28]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 46:
+			case 47: t_local_time=atomic_long_read(&time_in_exit[18]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 48: t_local_time=atomic_long_read(&time_in_exit[35]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 49: t_local_time=atomic_long_read(&time_in_exit[36]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 52: t_local_time=atomic_long_read(&time_in_exit[50]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 55: t_local_time=atomic_long_read(&time_in_exit[30]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 56: t_local_time=atomic_long_read(&time_in_exit[27]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 57: t_local_time=atomic_long_read(&time_in_exit[43]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 58: t_local_time=atomic_long_read(&time_in_exit[48]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 60: t_local_time=atomic_long_read(&time_in_exit[51]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 61: t_local_time=atomic_long_read(&time_in_exit[44]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 62: t_local_time=atomic_long_read(&time_in_exit[47]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 63: t_local_time=atomic_long_read(&time_in_exit[45]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 64: t_local_time=atomic_long_read(&time_in_exit[46]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 67: t_local_time=atomic_long_read(&time_in_exit[52]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			case 68:				
+				 t_local_time=atomic_long_read(&time_in_exit[17]);
+				ecx = t_local_time & 0xFFFFFFFF;
+				ebx = t_local_time >>32 & 0xFFFFFFFF;
+				break;
+			
 			case 35:
 			case 38:
 			case 42: {
@@ -1322,31 +1431,13 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 			case 4:
 			case 5:
 			case 6: 
-			case 7:
-			case 9:
 			case 11:
 			case 16:
 			case 17:
-			case 28:
-			case 29:
-			case 30:
-			case 31:
-			case 32:
 			case 33:
 			case 34:
-			case 37:
-			case 39:
-			case 41:
-			case 43:
-			case 44:
-			case 45:
-			case 48:
-			case 49:
-			case 50:
 			case 51:
-			case 54:
-			case 55:
-			case 56:
+			case 66:
 				{
 					eax = 0x00000000;
 					ebx = 0x00000000;
@@ -1354,14 +1445,6 @@ int kvm_emulate_cpuid(struct kvm_vcpu *vcpu)
 					edx = 0x00000000;
 				}
 				break;
-			
-			
-			
-			
-			
-
-
-
 		}
 	}
 
